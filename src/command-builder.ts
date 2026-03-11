@@ -8,18 +8,60 @@ import type {
 import { castValueToType } from "./cast.js";
 import { tokenizeInputString, type Token } from "./tokenizer.js";
 
+/**
+ * Fluent builder for defining and parsing CLI argument schemas.
+ *
+ * Call {@link addArgument} for each expected argument, then call {@link parse}
+ * with the raw input string to receive a typed result object.
+ *
+ * @example
+ * ```ts
+ * const result = new CommandBuilder("greet")
+ *   .addArgument("name")
+ *   .addArgument("-v", "--verbose")
+ *   .parse("Alice --verbose");
+ * // → { name: "Alice", verbose: true }
+ * ```
+ */
 export class CommandBuilder {
   private readonly commandName: string;
   private readonly argumentDefinitions: ArgumentDefinition[];
 
+  /**
+   * @param commandName - Display name used in error messages (e.g. `"my-cli"`).
+   */
   constructor(commandName: string) {
     this.commandName = commandName;
     this.argumentDefinitions = [];
   }
 
-  // Overload 1 – positional argument: addArgument("file", options?)
+  /**
+   * Register a **positional** argument, consumed in declaration order.
+   *
+   * @param positionalName - Bare identifier (no leading `-`); becomes the result key.
+   * @param options - Optional type and default configuration.
+   * @returns `this` for chaining.
+   *
+   * @example
+   * ```ts
+   * builder.addArgument("file", { type: "string", default: "index.js" });
+   * ```
+   */
   addArgument(positionalName: string, options?: ArgumentOptions): this;
-  // Overload 2 – option argument: addArgument("-v", "--verbose", options?)
+
+  /**
+   * Register an **option flag** argument (short and/or long form).
+   *
+   * @param shortOrLongFlag - A short flag (`"-v"`) or long flag (`"--verbose"`).
+   * @param longFlag - Companion long flag when supplying both forms.
+   * @param options - Optional type and default configuration.
+   * @returns `this` for chaining.
+   *
+   * @example
+   * ```ts
+   * builder.addArgument("-n", "--count", { type: "number", default: 1 });
+   * ```
+   */
   addArgument(shortOrLongFlag: string, longFlag: string, options?: ArgumentOptions): this;
 
   addArgument(
@@ -35,7 +77,27 @@ export class CommandBuilder {
     return this;
   }
 
-  // Parses a CLI string and returns a typed result object.
+  /**
+   * Parse a raw CLI input string against all registered argument definitions.
+   *
+   * Supported syntax forms:
+   * - Positional value:  `value`
+   * - Long option:       `--flag value`  or  `--flag=value`
+   * - Short option:      `-f value`      or  `-f=value`
+   * - Bare boolean flag: `--verbose`     (sets the value to `true`)
+   * - Inline boolean:    `--verbose=false`
+   * - Quoted value:      `"--literally-this-string"` (passed through as a positional)
+   *
+   * @param inputString - The raw argument string to parse.
+   * @returns A {@link ParsedArguments} object; all registered argument names are present as keys.
+   * @throws `Error` if an unknown flag is encountered, a required argument is missing,
+   *   a value cannot be cast to its declared type, or the input contains an unterminated quote.
+   *
+   * @example
+   * ```ts
+   * const result = builder.parse("hello --count=3");
+   * ```
+   */
   parse(inputString: string): ParsedArguments {
     const tokens = tokenizeInputString(inputString);
     const result: ParsedArguments = this.buildResultWithDefaults();
